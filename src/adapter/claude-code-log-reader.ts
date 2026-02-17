@@ -1,0 +1,149 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { join, sep } from "node:path";
+import { homedir } from "node:os";
+import { SessionEntry, type ConversationTurn } from "../domain/session.js";
+import type { AgentLogReader } from "../port/agent-log-reader.js";
+
+export class ClaudeCodeLogReader implements AgentLogReader {
+  private projectDir: string;
+
+  private constructor(projectDir: string) {
+    this.projectDir = projectDir;
+  }
+
+  static create(): ClaudeCodeLogReader {
+    const home = homedir();
+    const projectsDir = join(home, ".claude", "projects");
+    const cwd = process.cwd();
+    const encoded = encodePath(cwd);
+    const projectDir = join(projectsDir, encoded);
+
+    if (!existsSync(projectDir)) {
+      throw new Error(
+        `Claude Codeのプロジェクトディレクトリが見つかりません: ${projectDir}\n` +
+          `このディレクトリでClaude Codeを使ったことがあるか確認してください`
+      );
+    }
+
+    return new ClaudeCodeLogReader(projectDir);
+  }
+
+  async listSessions(): Promise<string[]> {
+    const entries = await readdir(this.projectDir);
+    const jsonlFiles = entries.filter((e) => e.endsWith(".jsonl"));
+
+    const filesWithTime = await Promise.all(
+      jsonlFiles.map(async (f) => {
+        const s = await stat(join(this.projectDir, f));
+        return { name: f.replace(/\.jsonl$/, ""), time: s.birthtimeMs };
+      })
+    );
+
+    filesWithTime.sort((a, b) => a.time - b.time);
+    return filesWithTime.map((f) => f.name);
+  }
+
+  async getSessionTimestamp(sessionId: string): Promise<Date> {
+    const path = join(this.projectDir, `${sessionId}.jsonl`);
+    if (!existsSync(path)) {
+      throw new Error(`セッション '${sessionId}' のログが見つかりません`);
+    }
+    const s = await stat(path);
+    return s.birthtime;
+  }
+
+  async readSession(sessionId: string): Promise<ConversationTurn[]> {
+    const path = join(this.projectDir, `${sessionId}.jsonl`);
+    if (!existsSync(path)) {
+      throw new Error(`セッション '${sessionId}' のログが見つかりません`);
+    }
+    return parseJsonl(await readFile(path, "utf-8"));
+  }
+}
+
+function encodePath(path: string): string {
+  const normalized = path.startsWith(sep) ? path.slice(1) : path;
+  return `-${normalized.replaceAll(sep, "-")}`;
+}
+
+function stripSystemReminders(text: string): string {
+  return text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "").trim();
+}
+
+export function parseJsonl(content: string): ConversationTurn[] {
+  const turns: ConversationTurn[] = [];
+  let currentUserPrompt: string | null = null;
+  let currentThinking: string[] = [];
+  let currentText: string[] = [];
+  let currentTools: string[] = [];
+  let currentSkills: string[] = [];
+
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    let entry: SessionEntry;
+    try {
+      const raw = JSON.parse(trimmed);
+      entry = SessionEntry.parse(raw);
+    } catch {
+      continue;
+    }
+
+    const message = entry.message;
+    if (!message) continue;
+    if (entry.isSidechain === true) continue;
+
+    if (message.role === "user") {
+      if (typeof message.content === "string") {
+        // 前のターンを保存
+        if (currentUserPrompt !== null) {
+          turns.push({
+            userPrompt: currentUserPrompt,
+            assistantThinking: currentThinking,
+            assistantText: currentText,
+            toolUses: currentTools,
+            skills: currentSkills,
+          });
+        }
+        currentUserPrompt = stripSystemReminders(message.content);
+        currentThinking = [];
+        currentText = [];
+        currentTools = [];
+        currentSkills = [];
+      }
+    } else if (message.role === "assistant") {
+      if (Array.isArray(message.content)) {
+        for (const block of message.content) {
+          if (block.type === "thinking" && "thinking" in block) {
+            currentThinking.push(block.thinking as string);
+          } else if (block.type === "text" && "text" in block) {
+            currentText.push(block.text as string);
+          } else if (block.type === "tool_use" && "name" in block) {
+            currentTools.push(block.name as string);
+            if (block.name === "Skill" && "input" in block) {
+              const input = block.input as Record<string, unknown>;
+              if (typeof input?.skill === "string") {
+                currentSkills.push(input.skill);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 最後のターン
+  if (currentUserPrompt !== null) {
+    turns.push({
+      userPrompt: currentUserPrompt,
+      assistantThinking: currentThinking,
+      assistantText: currentText,
+      toolUses: currentTools,
+      skills: currentSkills,
+    });
+  }
+
+  return turns;
+}

@@ -1,0 +1,32 @@
+{
+  "name": "intent-cli",
+  "version": "0.1.0",
+  "description": "意図のバージョン管理CLI — AIとの対話ログから意図の進化過程を抽出・構造化",
+  "type": "module",
+  "bin": {
+    "intent": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "cli",
+    "intent",
+    "vibe-coding",
+    "ai"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@iarna/toml": "^2.2.5",
+    "commander": "^14.0.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
