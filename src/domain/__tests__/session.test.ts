@@ -60,6 +60,7 @@ describe("summaryContext", () => {
       assistantThinking: ["考え中..."],
       assistantText: ["了解しました"],
       toolUses: ["Read", "Edit"],
+      toolResults: [],
       skills: [],
     };
     const ctx = summaryContext(turn);
@@ -76,6 +77,7 @@ describe("summaryContext", () => {
       assistantThinking: [],
       assistantText: [],
       toolUses: [],
+      toolResults: [],
       skills: [],
     };
     const ctx = summaryContext(turn);

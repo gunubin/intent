@@ -13,6 +13,9 @@ export async function showCommand(stepNumber: number): Promise<void> {
   if (step.tags.length > 0) {
     console.log(`tags: ${step.tags.join(", ")}`);
   }
+  if (step.relatedSteps.length > 0) {
+    console.log(`related: ${step.relatedSteps.map((n) => String(n).padStart(3, "0")).join(", ")}`);
+  }
   console.log();
   console.log(`## prompt\n\n${step.prompt}`);
   console.log(`\n## reasoning\n\n${step.reasoning}`);

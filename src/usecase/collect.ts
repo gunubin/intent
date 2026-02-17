@@ -5,6 +5,62 @@ import type { FileSystemRepository } from "../adapter/filesystem-repository.js";
 import type { Step } from "../domain/step.js";
 import type { ConversationTurn } from "../domain/session.js";
 
+const ERROR_PATTERNS = [
+  /^error[\[:\s]/im,
+  /^Error:/m,
+  /tool_use_error/,
+  /ENOENT/,
+  /EACCES/,
+  /TypeError:/,
+  /SyntaxError:/,
+  /ReferenceError:/,
+  /exit code [1-9]/,
+  /non-zero exit/,
+  /command not found/,
+  /No such file or directory$/m,
+];
+
+export function extractFriction(turns: ConversationTurn[]): string {
+  const frictions: string[] = [];
+
+  // エラーパターン検出
+  for (const turn of turns) {
+    for (const result of turn.toolResults) {
+      for (const pattern of ERROR_PATTERNS) {
+        if (pattern.test(result)) {
+          const firstLine = result.split("\n").find((l) => pattern.test(l));
+          if (firstLine) {
+            const trimmed = firstLine.trim().slice(0, 200);
+            if (!frictions.includes(trimmed)) {
+              frictions.push(trimmed);
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // 同じ tool_use の連続リトライ検出
+  const toolSequence = turns.flatMap((t) => t.toolUses);
+  let consecutive = 1;
+  for (let i = 1; i < toolSequence.length; i++) {
+    if (toolSequence[i] === toolSequence[i - 1]) {
+      consecutive++;
+    } else {
+      if (consecutive >= 3) {
+        frictions.push(`${toolSequence[i - 1]}のリトライ ${consecutive}回`);
+      }
+      consecutive = 1;
+    }
+  }
+  if (consecutive >= 3 && toolSequence.length > 0) {
+    frictions.push(`${toolSequence[toolSequence.length - 1]}のリトライ ${consecutive}回`);
+  }
+
+  return frictions.join("; ");
+}
+
 export class CollectUseCase {
   constructor(
     private reader: AgentLogReader,
@@ -79,10 +135,11 @@ export class CollectUseCase {
           session: sessionId,
           timestamp,
           tags: planDraft.tags ?? [],
+          relatedSteps: [],
           prompt: planDraft.prompt,
           reasoning: planDraft.reasoning,
           outcome: planDraft.outcome,
-          friction: "",
+          friction: extractFriction(turns),
         };
         await this.repository.saveStep(step);
         await this.repository.recordSession(sessionId);
@@ -104,10 +161,11 @@ export class CollectUseCase {
         session: sessionId,
         timestamp,
         tags: skillDraft.tags ?? [],
+        relatedSteps: [],
         prompt: skillDraft.prompt,
         reasoning: skillDraft.reasoning,
         outcome: skillDraft.outcome,
-        friction: "",
+        friction: extractFriction(turns),
       };
       await this.repository.saveStep(step);
       await this.repository.recordSession(sessionId);
@@ -149,10 +207,11 @@ export class CollectUseCase {
       session: sessionId,
       timestamp,
       tags: draft.tags ?? [],
+      relatedSteps: draft.relatedSteps ?? [],
       prompt: draft.prompt,
       reasoning: draft.reasoning,
       outcome: draft.outcome,
-      friction: "",
+      friction: extractFriction(turns),
     };
 
     await this.repository.saveStep(step);

@@ -7,6 +7,7 @@ const baseStep: Step = {
   session: "abc-123",
   timestamp: new Date("2025-01-15T10:30:00Z"),
   tags: ["feature", "test"],
+  relatedSteps: [],
   prompt: "テスト機能を追加してください",
   reasoning: "品質向上のため",
   outcome: "テストが追加された",
@@ -22,6 +23,7 @@ describe("toMarkdown", () => {
     expect(md).toContain('session: "abc-123"');
     expect(md).toContain("timestamp: 2025-01-15T10:30:00Z");
     expect(md).toContain("tags: [feature, test]");
+    expect(md).toContain("related: []");
     expect(md).toContain("## prompt\n\nテスト機能を追加してください");
     expect(md).toContain("## reasoning\n\n品質向上のため");
     expect(md).toContain("## outcome\n\nテストが追加された");
@@ -53,6 +55,7 @@ describe("fromMarkdown", () => {
     expect(parsed.session).toBe("abc-123");
     expect(parsed.timestamp.toISOString()).toBe("2025-01-15T10:30:00.000Z");
     expect(parsed.tags).toEqual(["feature", "test"]);
+    expect(parsed.relatedSteps).toEqual([]);
     expect(parsed.prompt).toBe("テスト機能を追加してください");
     expect(parsed.reasoning).toBe("品質向上のため");
     expect(parsed.outcome).toBe("テストが追加された");
@@ -76,5 +79,38 @@ describe("fromMarkdown", () => {
     const parsed = fromMarkdown(md);
     const md2 = toMarkdown(parsed);
     expect(md).toBe(md2);
+  });
+
+  it("relatedSteps のラウンドトリップ", () => {
+    const step: Step = { ...baseStep, relatedSteps: [1, 3, 5] };
+    const md = toMarkdown(step);
+    expect(md).toContain("related: [1, 3, 5]");
+    const parsed = fromMarkdown(md);
+    expect(parsed.relatedSteps).toEqual([1, 3, 5]);
+  });
+
+  it("related フィールドがないマークダウンでも空配列になる", () => {
+    const mdWithoutRelated = `---
+step: 1
+title: "テスト"
+session: "abc"
+timestamp: 2025-01-15T10:30:00Z
+tags: []
+---
+
+## prompt
+
+test
+
+## reasoning
+
+test
+
+## outcome
+
+test
+`;
+    const parsed = fromMarkdown(mdWithoutRelated);
+    expect(parsed.relatedSteps).toEqual([]);
   });
 });

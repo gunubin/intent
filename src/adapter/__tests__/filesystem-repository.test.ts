@@ -174,6 +174,7 @@ function makeStep(number: number, title: string): Step {
     session: "test-session",
     timestamp: new Date("2025-01-15T10:00:00Z"),
     tags: ["test"],
+    relatedSteps: [],
     prompt: "テストプロンプト",
     reasoning: "テスト理由",
     outcome: "テスト結果",

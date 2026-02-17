@@ -50,6 +50,7 @@ export interface ConversationTurn {
   assistantThinking: string[];
   assistantText: string[];
   toolUses: string[];
+  toolResults: string[];
   skills: string[];
 }
 

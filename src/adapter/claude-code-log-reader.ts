@@ -85,6 +85,7 @@ export function parseJsonl(content: string): ConversationTurn[] {
   let currentThinking: string[] = [];
   let currentText: string[] = [];
   let currentTools: string[] = [];
+  let currentToolResults: string[] = [];
   let currentSkills: string[] = [];
 
   for (const line of content.split("\n")) {
@@ -118,6 +119,7 @@ export function parseJsonl(content: string): ConversationTurn[] {
             assistantThinking: currentThinking,
             assistantText: currentText,
             toolUses: currentTools,
+            toolResults: currentToolResults,
             skills: currentSkills,
           });
         }
@@ -125,7 +127,24 @@ export function parseJsonl(content: string): ConversationTurn[] {
         currentThinking = [];
         currentText = [];
         currentTools = [];
+        currentToolResults = [];
         currentSkills = [];
+      } else if (Array.isArray(message.content)) {
+        // tool_result ブロックの content を蓄積
+        for (const block of message.content) {
+          if (block.type === "tool_result" && "content" in block) {
+            const content = block.content;
+            if (typeof content === "string") {
+              currentToolResults.push(content);
+            } else if (Array.isArray(content)) {
+              for (const item of content) {
+                if (typeof item === "object" && item !== null && "text" in item) {
+                  currentToolResults.push((item as { text: string }).text);
+                }
+              }
+            }
+          }
+        }
       }
     } else if (message.role === "assistant") {
       if (Array.isArray(message.content)) {
@@ -155,6 +174,7 @@ export function parseJsonl(content: string): ConversationTurn[] {
       assistantThinking: currentThinking,
       assistantText: currentText,
       toolUses: currentTools,
+      toolResults: currentToolResults,
       skills: currentSkills,
     });
   }

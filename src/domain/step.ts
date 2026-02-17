@@ -4,6 +4,7 @@ export interface Step {
   session: string;
   timestamp: Date;
   tags: string[];
+  relatedSteps: number[];
   prompt: string;
   reasoning: string;
   outcome: string;
@@ -13,6 +14,8 @@ export interface Step {
 export function toMarkdown(step: Step): string {
   const tagsStr =
     step.tags.length === 0 ? "[]" : `[${step.tags.join(", ")}]`;
+  const relatedStr =
+    step.relatedSteps.length === 0 ? "[]" : `[${step.relatedSteps.join(", ")}]`;
 
   const ts = step.timestamp.toISOString().replace(/\.\d{3}Z$/, "Z");
 
@@ -22,6 +25,7 @@ title: "${step.title}"
 session: "${step.session}"
 timestamp: ${ts}
 tags: ${tagsStr}
+related: ${relatedStr}
 ---
 
 ## prompt
@@ -73,12 +77,16 @@ export function fromMarkdown(content: string): Step {
   const tagsStr = extractFieldOptional(frontmatter, "tags") ?? "[]";
   const tags = parseTags(tagsStr);
 
+  const relatedStr = extractFieldOptional(frontmatter, "related") ?? "[]";
+  const relatedSteps = parseRelated(relatedStr);
+
   return {
     number,
     title,
     session,
     timestamp,
     tags,
+    relatedSteps,
     prompt: extractSection(body, "prompt"),
     reasoning: extractSection(body, "reasoning"),
     outcome: extractSection(body, "outcome"),
@@ -111,6 +119,12 @@ function parseTags(s: string): string[] {
   const inner = s.trim().replace(/^\[/, "").replace(/\]$/, "");
   if (!inner) return [];
   return inner.split(",").map((t) => t.trim());
+}
+
+function parseRelated(s: string): number[] {
+  const inner = s.trim().replace(/^\[/, "").replace(/\]$/, "");
+  if (!inner) return [];
+  return inner.split(",").map((t) => parseInt(t.trim(), 10)).filter((n) => !isNaN(n));
 }
 
 function extractSection(body: string, section: string): string {

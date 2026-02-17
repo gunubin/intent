@@ -7,6 +7,7 @@ import { logCommand } from "./cli/log.js";
 import { showCommand } from "./cli/show.js";
 import { resetCommand } from "./cli/reset.js";
 import { rmCommand } from "./cli/rm.js";
+import { replayCommand } from "./cli/replay.js";
 
 const program = new Command();
 
@@ -113,6 +114,25 @@ program
         process.exit(1);
       }
       await rmCommand(num);
+    } catch (e) {
+      console.error(`エラー: ${e instanceof Error ? e.message : e}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("replay")
+  .description("ステップのプロンプト履歴を再実行可能な形式で出力")
+  .option("-o, --output <file>", "出力先ファイルパス（省略時は stdout）")
+  .option("--from <step>", "開始ステップ番号")
+  .option("--to <step>", "終了ステップ番号")
+  .action(async (opts: { output?: string; from?: string; to?: string }) => {
+    try {
+      await replayCommand({
+        output: opts.output,
+        from: opts.from ? parseInt(opts.from, 10) : undefined,
+        to: opts.to ? parseInt(opts.to, 10) : undefined,
+      });
     } catch (e) {
       console.error(`エラー: ${e instanceof Error ? e.message : e}`);
       process.exit(1);

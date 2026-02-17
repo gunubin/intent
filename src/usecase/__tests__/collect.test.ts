@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { CollectUseCase, parsePlanText, parseSkillSession } from "../collect.js";
+import { CollectUseCase, parsePlanText, parseSkillSession, extractFriction } from "../collect.js";
 import type { ConversationTurn } from "../../domain/session.js";
 import type { AgentLogReader } from "../../port/agent-log-reader.js";
 import type { Summarizer, StepDraft } from "../../port/summarizer.js";
@@ -10,13 +10,15 @@ import type { Step } from "../../domain/step.js";
 function makeTurn(
   prompt: string,
   skills: string[] = [],
-  toolUses: string[] = []
+  toolUses: string[] = [],
+  toolResults: string[] = []
 ): ConversationTurn {
   return {
     userPrompt: prompt,
     assistantThinking: [],
     assistantText: [],
     toolUses,
+    toolResults,
     skills,
   };
 }
@@ -285,5 +287,70 @@ describe("CollectUseCase", () => {
     const result = await usecase.collectSession("session-1");
 
     expect(result).toBe(false);
+  });
+});
+
+describe("extractFriction", () => {
+  it("エラーを含む toolResults から friction を抽出する", () => {
+    const turns = [
+      makeTurn("ビルドして", [], ["Bash"], ["error[E0061]: this function takes 1 argument but 2 arguments were supplied"]),
+    ];
+    const friction = extractFriction(turns);
+    expect(friction).toContain("error[E0061]");
+  });
+
+  it("エラーがなければ空文字を返す", () => {
+    const turns = [
+      makeTurn("ビルドして", [], ["Bash"], ["Build succeeded"]),
+    ];
+    const friction = extractFriction(turns);
+    expect(friction).toBe("");
+  });
+
+  it("同じツールの3回以上の連続リトライを検出する", () => {
+    const turns = [
+      makeTurn("修正して", [], ["Edit", "Edit", "Edit"]),
+    ];
+    const friction = extractFriction(turns);
+    expect(friction).toContain("Editのリトライ 3回");
+  });
+
+  it("エラーとリトライの両方を検出する", () => {
+    const turns = [
+      makeTurn("修正して", [], ["Bash", "Bash", "Bash"], ["Error: command failed"]),
+    ];
+    const friction = extractFriction(turns);
+    expect(friction).toContain("Error: command failed");
+    expect(friction).toContain("Bashのリトライ 3回");
+  });
+
+  it("重複するエラーは1つにまとめる", () => {
+    const turns = [
+      makeTurn("修正して", [], [], ["error: something\nmore info"]),
+      makeTurn("もう一度", [], [], ["error: something\nmore info"]),
+    ];
+    const friction = extractFriction(turns);
+    const parts = friction.split("; ");
+    expect(parts).toHaveLength(1);
+  });
+
+  it("コード中の Error 文字列は誤検出しない", () => {
+    const turns = [
+      makeTurn("ファイル読んで", [], ["Read"], [
+        '49→                Status::Error => ("✕", Color::Red),',
+      ]),
+    ];
+    const friction = extractFriction(turns);
+    expect(friction).toBe("");
+  });
+
+  it("tool_use_error を検出する", () => {
+    const turns = [
+      makeTurn("修正して", [], ["Edit"], [
+        "<tool_use_error>File has been modified since read</tool_use_error>",
+      ]),
+    ];
+    const friction = extractFriction(turns);
+    expect(friction).toContain("tool_use_error");
   });
 });

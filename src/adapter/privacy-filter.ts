@@ -74,9 +74,12 @@ export class PrivacyFilter {
     return turns.filter((turn) => {
       const prompt = turn.userPrompt;
 
-      // 短すぎるプロンプトを除外
+      // 短すぎるプロンプトを除外（ただしツール使用や応答がある場合は意図あり）
       if (prompt.length < this.minPromptLength) {
-        return false;
+        const hasActivity = turn.toolUses.length > 0 || turn.assistantText.length > 0;
+        if (!hasActivity) {
+          return false;
+        }
       }
 
       // ユーザー設定のパターンマッチで除外

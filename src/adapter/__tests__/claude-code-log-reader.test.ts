@@ -295,4 +295,77 @@ describe("parseJsonl", () => {
     expect(turns).toHaveLength(1);
     expect(turns[0].userPrompt).toBe("質問");
   });
+
+  it("tool_result の content を toolResults に蓄積する", () => {
+    const content = jsonl(
+      {
+        type: "user",
+        message: { role: "user", content: "ビルドして" },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", name: "Bash" }],
+        },
+      },
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: [{ type: "tool_result", content: "error TS2345: type mismatch" }],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "修正します" }],
+        },
+      }
+    );
+    const turns = parseJsonl(content);
+
+    expect(turns).toHaveLength(1);
+    expect(turns[0].toolResults).toEqual(["error TS2345: type mismatch"]);
+  });
+
+  it("tool_result の配列形式 content を toolResults に蓄積する", () => {
+    const content = jsonl(
+      {
+        type: "user",
+        message: { role: "user", content: "実行して" },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", name: "Bash" }],
+        },
+      },
+      {
+        type: "user",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              content: [{ type: "text", text: "Build failed" }],
+            },
+          ],
+        },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "了解" }],
+        },
+      }
+    );
+    const turns = parseJsonl(content);
+
+    expect(turns).toHaveLength(1);
+    expect(turns[0].toolResults).toEqual(["Build failed"]);
+  });
 });

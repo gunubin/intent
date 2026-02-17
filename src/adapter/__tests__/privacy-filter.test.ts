@@ -2,13 +2,18 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { PrivacyFilter } from "../privacy-filter.js";
 import type { ConversationTurn } from "../../domain/session.js";
 
-function makeTurn(prompt: string): ConversationTurn {
+function makeTurn(
+  prompt: string,
+  overrides?: Partial<ConversationTurn>
+): ConversationTurn {
   return {
     userPrompt: prompt,
     assistantThinking: [],
     assistantText: [],
     toolUses: [],
+    toolResults: [],
     skills: [],
+    ...overrides,
   };
 }
 
@@ -70,5 +75,27 @@ describe("PrivacyFilter", () => {
     expect(filtered).toHaveLength(2);
     expect(filtered[0].userPrompt).toContain("正常なプロンプト");
     expect(filtered[1].userPrompt).toContain("ログイン画面");
+  });
+
+  it("短いプロンプトでもツール使用があれば通過する", () => {
+    const turns = [
+      makeTurn("バグ直して", { toolUses: ["Read", "Edit"] }),
+    ];
+    const filtered = filter.filterTurns(turns);
+    expect(filtered).toHaveLength(1);
+  });
+
+  it("短いプロンプトでもアシスタント応答があれば通過する", () => {
+    const turns = [
+      makeTurn("テスト追加", { assistantText: ["テストを追加しました"] }),
+    ];
+    const filtered = filter.filterTurns(turns);
+    expect(filtered).toHaveLength(1);
+  });
+
+  it("短いプロンプトでツール使用も応答もなければ除外する", () => {
+    const turns = [makeTurn("短い")];
+    const filtered = filter.filterTurns(turns);
+    expect(filtered).toHaveLength(0);
   });
 });

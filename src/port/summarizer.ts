@@ -7,6 +7,7 @@ export interface StepDraft {
   reasoning: string;
   outcome: string;
   tags?: string[];
+  relatedSteps?: number[];
   skip?: boolean;
 }
 

@@ -12,6 +12,7 @@ const StepDraftSchema = z.object({
   reasoning: z.string(),
   outcome: z.string(),
   tags: z.array(z.string()).optional(),
+  relatedSteps: z.array(z.number()).optional(),
   skip: z.boolean().optional(),
 });
 
@@ -27,9 +28,10 @@ const SUMMARIZE_PROMPT = `以下のAIとの会話ターンを分析して、JSON
 - reasoning: なぜこの実装になったかの説明（前のステップからの文脈の変化があれば含める）
 - outcome: 何ができるようになったかの説明
 - tags: 内容を分類する短いタグの配列（1〜4個）。例: ["bugfix"], ["feature","ux"], ["testing","ci"], ["refactor","security"]
+- relatedSteps: 前のステップと関連がある場合、そのステップ番号の配列。例: [3, 5]。関連がなければ省略
 
 必ず以下のJSON形式のみを出力してください（他のテキストは不要）:
-{"title":"...","prompt":"...","reasoning":"...","outcome":"...","tags":["..."]}
+{"title":"...","prompt":"...","reasoning":"...","outcome":"...","tags":["..."],"relatedSteps":[...]}
 
 スキップする場合:
 {"skip":true}
@@ -78,13 +80,12 @@ export class ClaudeCodeSummarizer implements Summarizer {
     }
 
     const parsed = JSON.parse(jsonStr);
-    const draft = StepDraftSchema.parse(parsed);
 
-    if (draft.skip) {
+    if (parsed.skip === true) {
       return null;
     }
 
-    return draft;
+    return StepDraftSchema.parse(parsed);
   }
 }
 
