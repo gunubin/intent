@@ -1,6 +1,6 @@
 {
   "name": "intent-log",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Version control for intent — extract and structure the evolution of human intent from AI coding sessions",
   "type": "module",
   "bin": {
