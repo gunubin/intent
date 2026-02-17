@@ -1,7 +1,19 @@
 import { spawn } from "node:child_process";
+import { z } from "zod/v4";
 import { summaryContext, type ConversationTurn } from "../domain/session.js";
 import type { Step } from "../domain/step.js";
 import type { StepDraft, Summarizer } from "../port/summarizer.js";
+
+const SUBPROCESS_TIMEOUT_MS = 120_000;
+
+const StepDraftSchema = z.object({
+  title: z.string(),
+  prompt: z.string(),
+  reasoning: z.string(),
+  outcome: z.string(),
+  tags: z.array(z.string()).optional(),
+  skip: z.boolean().optional(),
+});
 
 const SUMMARIZE_PROMPT = `以下のAIとの会話ターンを分析して、JSON形式で要約してください。
 
@@ -55,7 +67,7 @@ export class ClaudeCodeSummarizer implements Summarizer {
     delete env.CLAUDE_CODE;
     delete env.CLAUDECODE;
 
-    const { stdout, stderr } = await runClaude(prompt, env);
+    const { stdout } = await runClaude(prompt, env);
 
     const response = stdout.trim();
     const jsonStr = extractJson(response);
@@ -65,7 +77,8 @@ export class ClaudeCodeSummarizer implements Summarizer {
       );
     }
 
-    const draft = JSON.parse(jsonStr) as StepDraft;
+    const parsed = JSON.parse(jsonStr);
+    const draft = StepDraftSchema.parse(parsed);
 
     if (draft.skip) {
       return null;
@@ -78,7 +91,7 @@ export class ClaudeCodeSummarizer implements Summarizer {
 function runClaude(
   prompt: string,
   env: NodeJS.ProcessEnv
-): Promise<{ stdout: string; stderr: string }> {
+): Promise<{ stdout: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", ["-p", "--no-session-persistence"], {
       env,
@@ -88,6 +101,11 @@ function runClaude(
     let stdout = "";
     let stderr = "";
 
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      reject(new Error(`claude コマンドがタイムアウトしました (${SUBPROCESS_TIMEOUT_MS / 1000}秒)`));
+    }, SUBPROCESS_TIMEOUT_MS);
+
     child.stdout.on("data", (data: Buffer) => {
       stdout += data.toString();
     });
@@ -96,6 +114,7 @@ function runClaude(
     });
 
     child.on("error", (err) => {
+      clearTimeout(timer);
       reject(
         new Error(
           `claude コマンドの実行に失敗。claude CLIがインストールされているか確認してください: ${err.message}`
@@ -104,10 +123,11 @@ function runClaude(
     });
 
     child.on("close", (code) => {
-      if (code !== 0 && !stdout) {
+      clearTimeout(timer);
+      if (code !== 0) {
         reject(new Error(`claude コマンドがエラーを返しました (code ${code}): ${stderr}`));
       } else {
-        resolve({ stdout, stderr });
+        resolve({ stdout });
       }
     });
 

@@ -224,6 +224,56 @@ describe("parseJsonl", () => {
     expect(turns[0].userPrompt).toBe("質問です");
   });
 
+  it("Skill tool_use からスキル名を抽出する", () => {
+    const content = jsonl(
+      {
+        type: "user",
+        message: { role: "user", content: "/commit" },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "tool_use",
+              name: "Skill",
+              input: { skill: "commit-commands:commit" },
+            },
+          ],
+        },
+      }
+    );
+    const turns = parseJsonl(content);
+
+    expect(turns).toHaveLength(1);
+    expect(turns[0].skills).toEqual(["commit-commands:commit"]);
+    expect(turns[0].toolUses).toEqual(["Skill"]);
+  });
+
+  it("Skill 以外の tool_use はスキルに含めない", () => {
+    const content = jsonl(
+      {
+        type: "user",
+        message: { role: "user", content: "ファイルを読んで" },
+      },
+      {
+        type: "assistant",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "tool_use", name: "Read", input: { path: "/test" } },
+          ],
+        },
+      }
+    );
+    const turns = parseJsonl(content);
+
+    expect(turns).toHaveLength(1);
+    expect(turns[0].skills).toEqual([]);
+    expect(turns[0].toolUses).toEqual(["Read"]);
+  });
+
   it("messageなしのエントリはスキップされる", () => {
     const content = jsonl(
       { type: "progress" },

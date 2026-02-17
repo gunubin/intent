@@ -58,7 +58,12 @@ program
   .argument("<step>", "ステップ番号")
   .action(async (step: string) => {
     try {
-      await showCommand(parseInt(step, 10));
+      const num = parseInt(step, 10);
+      if (isNaN(num)) {
+        console.error("エラー: ステップ番号は数値で指定してください");
+        process.exit(1);
+      }
+      await showCommand(num);
     } catch (e) {
       console.error(`エラー: ${e instanceof Error ? e.message : e}`);
       process.exit(1);
@@ -102,7 +107,12 @@ program
   .argument("<step>", "ステップ番号")
   .action(async (step: string) => {
     try {
-      await rmCommand(parseInt(step, 10));
+      const num = parseInt(step, 10);
+      if (isNaN(num)) {
+        console.error("エラー: ステップ番号は数値で指定してください");
+        process.exit(1);
+      }
+      await rmCommand(num);
     } catch (e) {
       console.error(`エラー: ${e instanceof Error ? e.message : e}`);
       process.exit(1);

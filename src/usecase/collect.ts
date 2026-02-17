@@ -25,6 +25,7 @@ export class CollectUseCase {
 
     let collected = 0;
     let skipped = 0;
+    let failed = 0;
 
     for (const sessionId of sessions) {
       if (await this.repository.isSessionCollected(sessionId)) {
@@ -35,15 +36,17 @@ export class CollectUseCase {
         const result = await this.collectSession(sessionId);
         if (result) collected++;
       } catch (e) {
+        failed++;
         console.error(
           `セッション '${sessionId}' の収集に失敗: ${e instanceof Error ? e.message : e}`
         );
       }
     }
 
-    console.log(
-      `\n完了: ${collected}個収集, ${skipped}個スキップ（収集済み）, ${sessions.length}個合計`
-    );
+    const parts = [`${collected}個収集`, `${skipped}個スキップ（収集済み）`];
+    if (failed > 0) parts.push(`${failed}個失敗`);
+    parts.push(`${sessions.length}個合計`);
+    console.log(`\n完了: ${parts.join(", ")}`);
   }
 
   async collectSession(sessionId: string): Promise<boolean> {
@@ -197,8 +200,8 @@ export function parsePlanText(prompt: string): StepDraft | null {
   if (!titleMatch) return null;
 
   let title = titleMatch[1].trim();
-  if (title.length > 30) {
-    title = title.slice(0, 30);
+  if ([...title].length > 30) {
+    title = [...title].slice(0, 30).join("");
   }
 
   // ## Context セクションを抽出

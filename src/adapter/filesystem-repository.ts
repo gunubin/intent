@@ -85,8 +85,12 @@ export class FileSystemRepository implements StepRepository {
 
     const steps: Step[] = [];
     for (const file of mdFiles) {
-      const content = await readFile(join(dir, file), "utf-8");
-      steps.push(fromMarkdown(content));
+      try {
+        const content = await readFile(join(dir, file), "utf-8");
+        steps.push(fromMarkdown(content));
+      } catch (e) {
+        console.warn(`ステップファイル '${file}' の読み込みに失敗。スキップします: ${e instanceof Error ? e.message : e}`);
+      }
     }
     return steps;
   }

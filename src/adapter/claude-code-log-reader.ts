@@ -45,6 +45,7 @@ export class ClaudeCodeLogReader implements AgentLogReader {
   }
 
   async getSessionTimestamp(sessionId: string): Promise<Date> {
+    validateSessionId(sessionId);
     const path = join(this.projectDir, `${sessionId}.jsonl`);
     if (!existsSync(path)) {
       throw new Error(`セッション '${sessionId}' のログが見つかりません`);
@@ -54,11 +55,18 @@ export class ClaudeCodeLogReader implements AgentLogReader {
   }
 
   async readSession(sessionId: string): Promise<ConversationTurn[]> {
+    validateSessionId(sessionId);
     const path = join(this.projectDir, `${sessionId}.jsonl`);
     if (!existsSync(path)) {
       throw new Error(`セッション '${sessionId}' のログが見つかりません`);
     }
     return parseJsonl(await readFile(path, "utf-8"));
+  }
+}
+
+function validateSessionId(sessionId: string): void {
+  if (sessionId.includes("/") || sessionId.includes("\\") || sessionId.includes("..")) {
+    throw new Error(`不正なセッションID: ${sessionId}`);
   }
 }
 
@@ -83,12 +91,18 @@ export function parseJsonl(content: string): ConversationTurn[] {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
+    let raw: unknown;
+    try {
+      raw = JSON.parse(trimmed);
+    } catch {
+      continue; // JSON parse エラー: 不正な行をスキップ
+    }
+
     let entry: SessionEntry;
     try {
-      const raw = JSON.parse(trimmed);
       entry = SessionEntry.parse(raw);
     } catch {
-      continue;
+      continue; // スキーマ不一致: 未知のエントリ形式をスキップ
     }
 
     const message = entry.message;

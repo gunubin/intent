@@ -1,6 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { parsePlanText, parseSkillSession } from "../collect.js";
+import { describe, it, expect, vi } from "vitest";
+import { CollectUseCase, parsePlanText, parseSkillSession } from "../collect.js";
 import type { ConversationTurn } from "../../domain/session.js";
+import type { AgentLogReader } from "../../port/agent-log-reader.js";
+import type { Summarizer, StepDraft } from "../../port/summarizer.js";
+import type { FileSystemRepository } from "../../adapter/filesystem-repository.js";
+import type { PrivacyFilter } from "../../adapter/privacy-filter.js";
+import type { Step } from "../../domain/step.js";
 
 function makeTurn(
   prompt: string,
@@ -148,5 +153,137 @@ describe("parseSkillSession", () => {
     const draft = parseSkillSession(turns);
     expect(draft).not.toBeNull();
     expect(draft!.prompt).toBe("/commit");
+  });
+});
+
+// Mock factories
+function mockReader(
+  sessions: string[],
+  turnsMap: Record<string, ConversationTurn[]>
+): AgentLogReader {
+  return {
+    listSessions: vi.fn().mockResolvedValue(sessions),
+    readSession: vi.fn().mockImplementation((id: string) =>
+      Promise.resolve(turnsMap[id] ?? [])
+    ),
+    getSessionTimestamp: vi.fn().mockResolvedValue(new Date("2025-01-01")),
+  };
+}
+
+function mockSummarizer(draft: StepDraft | null = null): Summarizer {
+  return {
+    summarize: vi.fn().mockResolvedValue(draft),
+  };
+}
+
+function mockRepository(collectedSessions: string[] = []): FileSystemRepository {
+  const steps: Step[] = [];
+  let nextNum = 1;
+  const collected = new Set(collectedSessions);
+  return {
+    isSessionCollected: vi.fn().mockImplementation((id: string) =>
+      Promise.resolve(collected.has(id))
+    ),
+    recordSession: vi.fn().mockImplementation((id: string) => {
+      collected.add(id);
+      return Promise.resolve();
+    }),
+    nextStepNumber: vi.fn().mockImplementation(() => Promise.resolve(nextNum++)),
+    saveStep: vi.fn().mockImplementation((s: Step) => {
+      steps.push(s);
+      return Promise.resolve();
+    }),
+    listSteps: vi.fn().mockResolvedValue(steps),
+  } as unknown as FileSystemRepository;
+}
+
+function mockFilter(): PrivacyFilter {
+  return {
+    filterTurns: vi.fn().mockImplementation((turns: ConversationTurn[]) => turns),
+  } as unknown as PrivacyFilter;
+}
+
+describe("CollectUseCase", () => {
+  it("プラン実行セッションは summarizer を呼ばずに Step を生成する", async () => {
+    const planTurns = [makeTurn(`Implement the following plan:\n\n# テスト機能\n\n## Context\n\nテスト用コンテキスト。\n`)];
+    const reader = mockReader(["session-1"], { "session-1": planTurns });
+    const summarizer = mockSummarizer();
+    const repo = mockRepository();
+    const filter = mockFilter();
+
+    const usecase = new CollectUseCase(reader, summarizer, filter, repo);
+    const result = await usecase.collectSession("session-1");
+
+    expect(result).toBe(true);
+    expect(summarizer.summarize).not.toHaveBeenCalled();
+    expect(repo.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "テスト機能", tags: ["plan"] })
+    );
+  });
+
+  it("スキルセッションは summarizer を呼ばずに Step を生成する", async () => {
+    const skillTurns = [makeTurn("/commit", ["commit"], ["Skill"])];
+    const reader = mockReader(["session-1"], { "session-1": skillTurns });
+    const summarizer = mockSummarizer();
+    const repo = mockRepository();
+    const filter = mockFilter();
+
+    const usecase = new CollectUseCase(reader, summarizer, filter, repo);
+    const result = await usecase.collectSession("session-1");
+
+    expect(result).toBe(true);
+    expect(summarizer.summarize).not.toHaveBeenCalled();
+    expect(repo.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({ tags: ["skill"] })
+    );
+  });
+
+  it("通常セッションは summarizer を呼ぶ", async () => {
+    const normalTurns = [makeTurn("認証機能を追加して")];
+    const reader = mockReader(["session-1"], { "session-1": normalTurns });
+    const draft: StepDraft = {
+      title: "認証機能追加",
+      prompt: "認証機能を追加",
+      reasoning: "",
+      outcome: "認証追加完了",
+      tags: ["feature"],
+    };
+    const summarizer = mockSummarizer(draft);
+    const repo = mockRepository();
+    const filter = mockFilter();
+
+    const usecase = new CollectUseCase(reader, summarizer, filter, repo);
+    const result = await usecase.collectSession("session-1");
+
+    expect(result).toBe(true);
+    expect(summarizer.summarize).toHaveBeenCalled();
+    expect(repo.saveStep).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "認証機能追加" })
+    );
+  });
+
+  it("収集済みセッションはスキップする", async () => {
+    const reader = mockReader(["session-1"], { "session-1": [makeTurn("test")] });
+    const summarizer = mockSummarizer();
+    const repo = mockRepository(["session-1"]);
+    const filter = mockFilter();
+
+    const usecase = new CollectUseCase(reader, summarizer, filter, repo);
+    const result = await usecase.collectSession("session-1");
+
+    expect(result).toBe(false);
+    expect(reader.readSession).not.toHaveBeenCalled();
+  });
+
+  it("空セッションは false を返す", async () => {
+    const reader = mockReader(["session-1"], { "session-1": [] });
+    const summarizer = mockSummarizer();
+    const repo = mockRepository();
+    const filter = mockFilter();
+
+    const usecase = new CollectUseCase(reader, summarizer, filter, repo);
+    const result = await usecase.collectSession("session-1");
+
+    expect(result).toBe(false);
   });
 });
