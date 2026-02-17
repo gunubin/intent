@@ -1,11 +1,19 @@
 {
-  "name": "intent-cli",
+  "name": "intent-log",
   "version": "0.1.0",
-  "description": "意図のバージョン管理CLI — AIとの対話ログから意図の進化過程を抽出・構造化",
+  "description": "Version control for intent — extract and structure the evolution of human intent from AI coding sessions",
   "type": "module",
   "bin": {
     "intent": "./dist/index.js"
   },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gunubin/intent.git"
+  },
+  "homepage": "https://github.com/gunubin/intent",
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
@@ -15,7 +23,8 @@
     "cli",
     "intent",
     "vibe-coding",
-    "ai"
+    "ai",
+    "claude-code"
   ],
   "license": "MIT",
   "dependencies": {
