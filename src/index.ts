@@ -13,7 +13,7 @@ const program = new Command();
 program
   .name("intent")
   .description("意図のバージョン管理CLI — AIとの対話ログから意図の進化過程を抽出・構造化")
-  .version("0.1.0");
+  .version("0.2.0");
 
 program
   .command("init")
