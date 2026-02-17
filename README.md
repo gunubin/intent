@@ -1,5 +1,9 @@
 # intent
 
+[![CI](https://github.com/gunubin/intent/actions/workflows/ci.yml/badge.svg)](https://github.com/gunubin/intent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org/)
+
 **Version control for intent, not just code.**
 
 When you build software with AI agents, your codebase changes fast — but the *why* behind each change gets lost in chat logs. `intent` extracts the human intent from your AI coding sessions and turns it into a readable, reviewable history.
